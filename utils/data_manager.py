@@ -1,19 +1,20 @@
-import json
-from pathlib import Path
+import streamlit as st
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# ==========================================
+# INITIALIZE USER DATA
+# ==========================================
 
-NOTES_DIR = BASE_DIR / "data" / "notes"
-PROGRESS_DIR = BASE_DIR / "data" / "progress"
+def initialize_user_data():
 
-QUIZ_FILE = PROGRESS_DIR / "quiz_results.json"
-STUDY_FILE = PROGRESS_DIR / "study_hours.json"
+    if "quiz_results" not in st.session_state:
+        st.session_state.quiz_results = []
 
+    if "study_hours" not in st.session_state:
+        st.session_state.study_hours = 0.0
 
-# Create folders if they don't exist
-NOTES_DIR.mkdir(parents=True, exist_ok=True)
-PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
+    if "notes" not in st.session_state:
+        st.session_state.notes = []
 
 
 # ==========================================
@@ -22,42 +23,13 @@ PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
 
 def save_quiz_result(score, total, accuracy):
 
-    results = []
+    initialize_user_data()
 
-    if QUIZ_FILE.exists():
-
-        try:
-            with open(
-                QUIZ_FILE,
-                "r",
-                encoding="utf-8"
-            ) as file:
-
-                data = json.load(file)
-
-                if isinstance(data, list):
-                    results = data
-
-        except Exception:
-            results = []
-
-    results.append({
+    st.session_state.quiz_results.append({
         "score": score,
         "total": total,
         "accuracy": accuracy
     })
-
-    with open(
-        QUIZ_FILE,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            results,
-            file,
-            indent=4
-        )
 
 
 # ==========================================
@@ -66,26 +38,9 @@ def save_quiz_result(score, total, accuracy):
 
 def get_quiz_results():
 
-    if not QUIZ_FILE.exists():
-        return []
+    initialize_user_data()
 
-    try:
-
-        with open(
-            QUIZ_FILE,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            results = json.load(file)
-
-        if isinstance(results, list):
-            return results
-
-        return []
-
-    except Exception:
-        return []
+    return st.session_state.quiz_results
 
 
 # ==========================================
@@ -96,54 +51,40 @@ def get_quiz_stats():
 
     results = get_quiz_results()
 
-    if len(results) == 0:
-
+    if not results:
         return {
             "quiz_count": 0,
             "accuracy": 0
         }
 
-    accuracies = []
-
-    for result in results:
-
-        if "accuracy" in result:
-
-            try:
-                accuracies.append(
-                    float(result["accuracy"])
-                )
-            except Exception:
-                pass
-
-    average_accuracy = (
-        sum(accuracies) / len(accuracies)
-        if accuracies
-        else 0
-    )
+    accuracies = [
+        float(result.get("accuracy", 0))
+        for result in results
+    ]
 
     return {
         "quiz_count": len(results),
-        "accuracy": average_accuracy
+        "accuracy": sum(accuracies) / len(accuracies)
     }
 
 
 # ==========================================
-# NOTES COUNT
+# NOTES
 # ==========================================
+
+def add_note(filename):
+
+    initialize_user_data()
+
+    if filename not in st.session_state.notes:
+        st.session_state.notes.append(filename)
+
 
 def get_notes_count():
 
-    if not NOTES_DIR.exists():
-        return 0
+    initialize_user_data()
 
-    files = [
-        file
-        for file in NOTES_DIR.iterdir()
-        if file.is_file()
-    ]
-
-    return len(files)
+    return len(st.session_state.notes)
 
 
 # ==========================================
@@ -152,30 +93,9 @@ def get_notes_count():
 
 def get_study_hours():
 
-    if not STUDY_FILE.exists():
-        return 0
+    initialize_user_data()
 
-    try:
-
-        with open(
-            STUDY_FILE,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            data = json.load(file)
-
-        if isinstance(data, dict):
-
-            return float(
-                data.get("hours", 0)
-            )
-
-        return 0
-
-    except Exception:
-
-        return 0
+    return float(st.session_state.study_hours)
 
 
 # ==========================================
@@ -184,19 +104,9 @@ def get_study_hours():
 
 def save_study_hours(hours):
 
-    with open(
-        STUDY_FILE,
-        "w",
-        encoding="utf-8"
-    ) as file:
+    initialize_user_data()
 
-        json.dump(
-            {
-                "hours": hours
-            },
-            file,
-            indent=4
-        )
+    st.session_state.study_hours = float(hours)
 
 
 # ==========================================
