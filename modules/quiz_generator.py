@@ -1,28 +1,26 @@
+import os
 import requests
 import json
 import re
+import random
+import streamlit as st
 
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "llama3.2"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL = "openai/gpt-oss-20b"
+
+
+def get_api_key():
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        return os.environ.get("GROQ_API_KEY")
 
 
 def clean_json(text):
     text = text.strip()
-
-    text = re.sub(
-        r"```json",
-        "",
-        text,
-        flags=re.IGNORECASE
-    )
-
-    text = re.sub(
-        r"```",
-        "",
-        text
-    )
-
+    text = re.sub(r"```json", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"```", "", text)
     return text.strip()
 
 
@@ -33,6 +31,11 @@ def generate_one_question(
     question_number,
     previous_questions
 ):
+
+    api_key = get_api_key()
+
+    if not api_key:
+        return None
 
     previous = "\n".join(
         f"- {q['question']}"
@@ -66,10 +69,10 @@ Return ONLY valid JSON in exactly this format:
 {{
     "question": "Your question here",
     "options": [
-        "Option A",
-        "Option B",
-        "Option C",
-        "Option D"
+        "Option 1",
+        "Option 2",
+        "Option 3",
+        "Option 4"
     ],
     "answer": "The exact correct option"
 }}
@@ -78,7 +81,11 @@ Return ONLY valid JSON in exactly this format:
     try:
 
         response = requests.post(
-            OLLAMA_URL,
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
             json={
                 "model": MODEL,
                 "messages": [
@@ -87,28 +94,22 @@ Return ONLY valid JSON in exactly this format:
                         "content": prompt
                     }
                 ],
-                "stream": False,
-                "format": "json"
+                "temperature": 0.7,
+                "max_completion_tokens": 1024,
+                "response_format": {
+                    "type": "json_object"
+                }
             },
-            timeout=180
+            timeout=120
         )
 
         response.raise_for_status()
 
         data = response.json()
 
-        content = data["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
 
-        content = clean_json(content)
-
-        question = json.loads(content)
-
-        if isinstance(question, list):
-
-            if not question:
-                return None
-
-            question = question[0]
+        question = json.loads(clean_json(content))
 
         if not isinstance(question, dict):
             return None
@@ -135,17 +136,15 @@ Return ONLY valid JSON in exactly this format:
             for option in options
         ]
 
-        # Check duplicate options
+        # Make sure all 4 options are different
         if len(
             set(option.lower() for option in options)
         ) != 4:
             return None
 
-        answer = str(
-            question["answer"]
-        ).strip()
+        answer = str(question["answer"]).strip()
 
-        # Match answer with one of the options
+        # Find the exact correct option
         correct_answer = None
 
         for option in options:
@@ -158,17 +157,24 @@ Return ONLY valid JSON in exactly this format:
         if correct_answer is None:
             return None
 
-        # Check duplicate questions
+        # Prevent duplicate questions
         previous_questions_lower = [
             q["question"].strip().lower()
             for q in previous_questions
         ]
 
-        if (
-            question["question"].strip().lower()
-            in previous_questions_lower
-        ):
+        if question["question"].strip().lower() in previous_questions_lower:
             return None
+
+        # ==========================================
+        # RANDOMIZE OPTIONS
+        # ==========================================
+
+        random.shuffle(options)
+
+        # ==========================================
+        # RETURN QUESTION
+        # ==========================================
 
         return {
             "question": question["question"].strip(),
@@ -191,7 +197,6 @@ def generate_quiz(
 
     for i in range(1, count + 1):
 
-        # Try up to 4 times for each question
         for attempt in range(4):
 
             question = generate_one_question(
