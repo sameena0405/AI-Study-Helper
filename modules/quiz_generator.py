@@ -19,8 +19,20 @@ def get_api_key():
 
 def clean_json(text):
     text = text.strip()
-    text = re.sub(r"```json", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"```", "", text)
+
+    text = re.sub(
+        r"```json",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    text = re.sub(
+        r"```",
+        "",
+        text
+    )
+
     return text.strip()
 
 
@@ -35,6 +47,7 @@ def generate_one_question(
     api_key = get_api_key()
 
     if not api_key:
+        st.error("❌ GROQ_API_KEY is not configured.")
         return None
 
     previous = "\n".join(
@@ -103,32 +116,67 @@ Return ONLY valid JSON in exactly this format:
             timeout=120
         )
 
-        response.raise_for_status()
+        # Show API error details
+        if response.status_code != 200:
+            st.error(
+                f"❌ Groq API Error "
+                f"({response.status_code}): "
+                f"{response.text}"
+            )
+            return None
 
         data = response.json()
 
+        if "choices" not in data:
+            st.error(
+                f"❌ Unexpected Groq response: {data}"
+            )
+            return None
+
         content = data["choices"][0]["message"]["content"]
 
-        question = json.loads(clean_json(content))
+        if not content:
+            st.error("❌ Groq returned an empty response.")
+            return None
+
+        content = clean_json(content)
+
+        try:
+            question = json.loads(content)
+        except json.JSONDecodeError as e:
+            st.error(
+                f"❌ Invalid JSON returned by Groq: {e}\n\n"
+                f"Response:\n{content}"
+            )
+            return None
 
         if not isinstance(question, dict):
+            st.error("❌ AI response is not a JSON object.")
             return None
 
         if "question" not in question:
+            st.error("❌ AI response is missing 'question'.")
             return None
 
         if "options" not in question:
+            st.error("❌ AI response is missing 'options'.")
             return None
 
         if "answer" not in question:
+            st.error("❌ AI response is missing 'answer'.")
             return None
 
         options = question["options"]
 
         if not isinstance(options, list):
+            st.error("❌ AI options are not in list format.")
             return None
 
         if len(options) != 4:
+            st.error(
+                f"❌ AI generated {len(options)} options "
+                f"instead of exactly 4."
+            )
             return None
 
         options = [
@@ -140,11 +188,14 @@ Return ONLY valid JSON in exactly this format:
         if len(
             set(option.lower() for option in options)
         ) != 4:
+            st.error("❌ AI generated duplicate options.")
             return None
 
-        answer = str(question["answer"]).strip()
+        answer = str(
+            question["answer"]
+        ).strip()
 
-        # Find the exact correct option
+        # Find exact correct option
         correct_answer = None
 
         for option in options:
@@ -155,6 +206,10 @@ Return ONLY valid JSON in exactly this format:
                 break
 
         if correct_answer is None:
+            st.error(
+                "❌ The correct answer does not match "
+                "any of the generated options."
+            )
             return None
 
         # Prevent duplicate questions
@@ -163,26 +218,49 @@ Return ONLY valid JSON in exactly this format:
             for q in previous_questions
         ]
 
-        if question["question"].strip().lower() in previous_questions_lower:
+        current_question = (
+            str(question["question"]).strip()
+        )
+
+        if current_question.lower() in previous_questions_lower:
+            st.warning(
+                "⚠️ AI generated a duplicate question. "
+                "Trying again..."
+            )
             return None
 
-        # ==========================================
-        # RANDOMIZE OPTIONS
-        # ==========================================
-
+        # Randomize options
         random.shuffle(options)
 
-        # ==========================================
-        # RETURN QUESTION
-        # ==========================================
-
         return {
-            "question": question["question"].strip(),
+            "question": current_question,
             "options": options,
             "answer": correct_answer
         }
 
-    except Exception:
+    except requests.exceptions.Timeout:
+        st.error(
+            "⏳ Groq request timed out. "
+            "Please try generating the quiz again."
+        )
+        return None
+
+    except requests.exceptions.ConnectionError as e:
+        st.error(
+            f"❌ Could not connect to Groq API: {e}"
+        )
+        return None
+
+    except requests.exceptions.RequestException as e:
+        st.error(
+            f"❌ Request error: {e}"
+        )
+        return None
+
+    except Exception as e:
+        st.error(
+            f"❌ Quiz generation error: {e}"
+        )
         return None
 
 
