@@ -1,34 +1,42 @@
+import os
 import requests
+import streamlit as st
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL = "openai/gpt-oss-20b"
 
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "llama3.2"
+def get_api_key():
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        return os.environ.get("GROQ_API_KEY")
 
 
 def answer_question(question, topic="General", difficulty="Medium", history=None):
 
+    api_key = get_api_key()
+
+    if not api_key:
+        return "❌ GROQ_API_KEY is not configured."
+
     system_prompt = f"""
 You are an intelligent AI Study Assistant.
 
-Your job is to help a student understand academic subjects clearly.
-
-Current subject: {topic}
-Requested difficulty: {difficulty}
+Subject: {topic}
+Difficulty: {difficulty}
 
 Instructions:
 - Answer the student's question directly.
-- Do not give the same answer repeatedly.
-- If the student asks for a deep explanation, provide a detailed step-by-step explanation.
-- If the student asks for a simple explanation, explain it in beginner-friendly language.
-- Give real-world examples when useful.
-- Give technical examples when useful.
-- For comparisons, use a clear table when appropriate.
-- For programming questions, provide code and explain it.
+- Explain concepts clearly and accurately.
+- Use simple language when appropriate.
+- Give step-by-step explanations for difficult topics.
+- Give examples when useful.
+- For programming questions, provide correct code and explanation.
+- For comparisons, use a table when useful.
 - For exam preparation, highlight important points.
-- Understand follow-up questions using the previous conversation.
-- If the student asks "explain it again", explain the previous concept differently.
-- If the student asks "explain deeply", expand the explanation instead of repeating it.
-- Do not mention that you are an AI model unless specifically asked.
+- Do not repeat the same answer unnecessarily.
+- Understand follow-up questions using conversation history.
 """
 
     messages = [
@@ -47,13 +55,17 @@ Instructions:
     })
 
     try:
-
         response = requests.post(
-            OLLAMA_URL,
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
             json={
                 "model": MODEL,
                 "messages": messages,
-                "stream": False
+                "temperature": 0.7,
+                "max_tokens": 2048
             },
             timeout=120
         )
@@ -62,19 +74,13 @@ Instructions:
 
         data = response.json()
 
-        return data["message"]["content"]
-
-    except requests.exceptions.ConnectionError:
-        return (
-            "❌ Could not connect to Ollama.\n\n"
-            "Please make sure Ollama is running and try again."
-        )
+        return data["choices"][0]["message"]["content"]
 
     except requests.exceptions.Timeout:
-        return (
-            "⏳ The AI is taking too long to respond. "
-            "Please try again."
-        )
+        return "⏳ AI is taking too long to respond. Please try again."
+
+    except requests.exceptions.RequestException as e:
+        return f"❌ Groq API Error: {str(e)}"
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
