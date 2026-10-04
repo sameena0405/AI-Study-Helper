@@ -1,8 +1,8 @@
 streamlit
 pandas
+scikit-learn
 plotly
 pypdf
 python-docx
 requests
-scikit-learn
-numpy
+supabase

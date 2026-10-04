@@ -1,53 +1,9 @@
-import sqlite3
-from pathlib import Path
 import streamlit as st
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DB_FILE = BASE_DIR / "data" / "users.db"
-
-DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+from utils.supabase_client import supabase
 
 
-def get_connection():
-    return sqlite3.connect(DB_FILE)
-
-
-def create_data_tables():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS quiz_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            score INTEGER NOT NULL,
-            total INTEGER NOT NULL,
-            accuracy REAL NOT NULL
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            filename TEXT NOT NULL,
-            content TEXT NOT NULL
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS study_hours (
-            user_id INTEGER PRIMARY KEY,
-            hours REAL NOT NULL DEFAULT 0
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-create_data_tables()
-
+# ---------------- USER ----------------
 
 def get_current_user_id():
     return st.session_state.get("user_id")
@@ -61,17 +17,12 @@ def save_quiz_result(score, total, accuracy):
     if user_id is None:
         return
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO quiz_results
-        (user_id, score, total, accuracy)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, score, total, float(accuracy)))
-
-    conn.commit()
-    conn.close()
+    supabase.table("quiz_results").insert({
+        "user_id": str(user_id),
+        "score": int(score),
+        "total": int(total),
+        "accuracy": float(accuracy)
+    }).execute()
 
 
 def get_quiz_results():
@@ -80,27 +31,16 @@ def get_quiz_results():
     if user_id is None:
         return []
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("quiz_results")
+        .select("score,total,accuracy")
+        .eq("user_id", str(user_id))
+        .order("id")
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT score, total, accuracy
-        FROM quiz_results
-        WHERE user_id = ?
-        ORDER BY id
-    """, (user_id,))
-
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [
-        {
-            "score": row[0],
-            "total": row[1],
-            "accuracy": row[2]
-        }
-        for row in rows
-    ]
+    return response.data or []
 
 
 def get_quiz_stats():
@@ -134,34 +74,31 @@ def save_note(filename, content):
     if user_id is None:
         return
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    existing = (
+        supabase
+        .table("notes")
+        .select("id")
+        .eq("user_id", str(user_id))
+        .eq("filename", filename)
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT id
-        FROM notes
-        WHERE user_id = ?
-        AND filename = ?
-    """, (user_id, filename))
+    if existing.data:
 
-    existing = cursor.fetchone()
-
-    if existing:
-        cursor.execute("""
-            UPDATE notes
-            SET content = ?
-            WHERE id = ?
-        """, (content, existing[0]))
+        supabase.table("notes").update({
+            "content": content
+        }).eq(
+            "id",
+            existing.data[0]["id"]
+        ).execute()
 
     else:
-        cursor.execute("""
-            INSERT INTO notes
-            (user_id, filename, content)
-            VALUES (?, ?, ?)
-        """, (user_id, filename, content))
 
-    conn.commit()
-    conn.close()
+        supabase.table("notes").insert({
+            "user_id": str(user_id),
+            "filename": filename,
+            "content": content
+        }).execute()
 
 
 def get_notes():
@@ -170,22 +107,18 @@ def get_notes():
     if user_id is None:
         return {}
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT filename, content
-        FROM notes
-        WHERE user_id = ?
-        ORDER BY id
-    """, (user_id,))
-
-    rows = cursor.fetchall()
-    conn.close()
+    response = (
+        supabase
+        .table("notes")
+        .select("filename,content")
+        .eq("user_id", str(user_id))
+        .order("id")
+        .execute()
+    )
 
     return {
-        row[0]: row[1]
-        for row in rows
+        row["filename"]: row["content"]
+        for row in (response.data or [])
     }
 
 
@@ -195,17 +128,14 @@ def delete_note(filename):
     if user_id is None:
         return
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        DELETE FROM notes
-        WHERE user_id = ?
-        AND filename = ?
-    """, (user_id, filename))
-
-    conn.commit()
-    conn.close()
+    (
+        supabase
+        .table("notes")
+        .delete()
+        .eq("user_id", str(user_id))
+        .eq("filename", filename)
+        .execute()
+    )
 
 
 def get_notes_count():
@@ -214,20 +144,15 @@ def get_notes_count():
     if user_id is None:
         return 0
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("notes")
+        .select("id")
+        .eq("user_id", str(user_id))
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT COUNT(*)
-        FROM notes
-        WHERE user_id = ?
-    """, (user_id,))
-
-    count = cursor.fetchone()[0]
-
-    conn.close()
-
-    return count
+    return len(response.data or [])
 
 
 # ---------------- STUDY HOURS ----------------
@@ -238,19 +163,29 @@ def save_study_hours(hours):
     if user_id is None:
         return
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    existing = (
+        supabase
+        .table("study_hours")
+        .select("user_id")
+        .eq("user_id", str(user_id))
+        .execute()
+    )
 
-    cursor.execute("""
-        INSERT INTO study_hours
-        (user_id, hours)
-        VALUES (?, ?)
-        ON CONFLICT(user_id)
-        DO UPDATE SET hours = excluded.hours
-    """, (user_id, float(hours)))
+    if existing.data:
 
-    conn.commit()
-    conn.close()
+        supabase.table("study_hours").update({
+            "hours": float(hours)
+        }).eq(
+            "user_id",
+            str(user_id)
+        ).execute()
+
+    else:
+
+        supabase.table("study_hours").insert({
+            "user_id": str(user_id),
+            "hours": float(hours)
+        }).execute()
 
 
 def get_study_hours():
@@ -259,21 +194,16 @@ def get_study_hours():
     if user_id is None:
         return 0
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    response = (
+        supabase
+        .table("study_hours")
+        .select("hours")
+        .eq("user_id", str(user_id))
+        .execute()
+    )
 
-    cursor.execute("""
-        SELECT hours
-        FROM study_hours
-        WHERE user_id = ?
-    """, (user_id,))
-
-    result = cursor.fetchone()
-
-    conn.close()
-
-    if result:
-        return float(result[0])
+    if response.data:
+        return float(response.data[0]["hours"])
 
     return 0
 

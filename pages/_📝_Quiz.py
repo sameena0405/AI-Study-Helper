@@ -10,7 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-
 st.title("📝 AI Quiz Generator")
 
 st.write(
@@ -21,13 +20,23 @@ st.divider()
 
 
 # -----------------------------
+# Check logged-in user
+# -----------------------------
+
+user_id = st.session_state.get("user_id")
+
+if user_id is None:
+    st.error("❌ User session not found. Please logout and login again.")
+    st.stop()
+
+
+# -----------------------------
 # Quiz Settings
 # -----------------------------
 
 col1, col2 = st.columns(2)
 
 with col1:
-
     subject = st.selectbox(
         "📚 Select Subject",
         [
@@ -43,9 +52,7 @@ with col1:
         ]
     )
 
-
 with col2:
-
     difficulty = st.selectbox(
         "🎯 Difficulty",
         [
@@ -118,11 +125,11 @@ if st.button(
         ):
 
             quiz = generate_quiz(
-    subject,
-    topic,
-    difficulty,
-    num_questions
-)
+                subject,
+                topic,
+                difficulty,
+                num_questions
+            )
 
         if len(quiz) < num_questions:
 
@@ -136,11 +143,8 @@ if st.button(
         else:
 
             st.session_state.quiz = quiz
-
             st.session_state.quiz_topic = topic
-
             st.session_state.quiz_difficulty = difficulty
-
             st.session_state.quiz_submitted = False
 
             st.success(
@@ -149,7 +153,7 @@ if st.button(
 
 
 # -----------------------------
-# Display Quiz ONLY after generation
+# Display Quiz
 # -----------------------------
 
 if "quiz" in st.session_state:
@@ -163,8 +167,7 @@ if "quiz" in st.session_state:
     )
 
     st.caption(
-        f"Difficulty: "
-        f"{st.session_state.quiz_difficulty} | "
+        f"Difficulty: {st.session_state.quiz_difficulty} | "
         f"Questions: {len(quiz)}"
     )
 
@@ -207,15 +210,35 @@ if "quiz" in st.session_state:
         ) * 100
 
 
-        save_quiz_result(
-            score,
-            len(quiz),
-            accuracy
-        )
+        # -----------------------------
+        # Save result to Supabase
+        # -----------------------------
+
+        try:
+
+            save_quiz_result(
+                score,
+                len(quiz),
+                accuracy
+            )
+
+            st.success(
+                "☁️ Quiz result saved successfully!"
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"❌ Could not save quiz result: {e}"
+            )
 
 
         st.session_state.quiz_submitted = True
 
+
+        # -----------------------------
+        # Result
+        # -----------------------------
 
         st.divider()
 
@@ -237,6 +260,10 @@ if "quiz" in st.session_state:
                 f"{accuracy:.0f}%"
             )
 
+
+        # -----------------------------
+        # Answer Review
+        # -----------------------------
 
         st.divider()
 

@@ -8,13 +8,6 @@ from utils.auth import (
 
 
 # ==========================================
-# DATABASE
-# ==========================================
-
-create_users_table()
-
-
-# ==========================================
 # PAGE SETTINGS
 # ==========================================
 
@@ -26,26 +19,32 @@ st.set_page_config(
 
 
 # ==========================================
+# DATABASE
+# ==========================================
+
+create_users_table()
+
+
+# ==========================================
 # SESSION STATE
 # ==========================================
 
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state["logged_in"] = False
 
 if "user_id" not in st.session_state:
-    st.session_state.user_id = None
+    st.session_state["user_id"] = None
 
 if "username" not in st.session_state:
-    st.session_state.username = None
+    st.session_state["username"] = None
 
 
 # ==========================================
 # LOGIN SCREEN
 # ==========================================
 
-if not st.session_state.logged_in:
+if not st.session_state["logged_in"]:
 
-    # Hide sidebar before login
     st.markdown(
         """
         <style>
@@ -124,9 +123,14 @@ if not st.session_state.logged_in:
 
                     if user:
 
-                        st.session_state.logged_in = True
-                        st.session_state.user_id = user[0]
-                        st.session_state.username = user[1]
+                        # Store complete login session
+                        st.session_state["logged_in"] = True
+                        st.session_state["user_id"] = str(user[0])
+                        st.session_state["username"] = str(user[1])
+
+                        st.success(
+                            f"✅ Login successful! Welcome {user[1]}"
+                        )
 
                         st.rerun()
 
@@ -135,6 +139,7 @@ if not st.session_state.logged_in:
                         st.error(
                             "❌ Invalid username or password."
                         )
+
 
         # ==================================
         # CREATE ACCOUNT
@@ -215,7 +220,7 @@ if not st.session_state.logged_in:
 # ==========================================
 
 st.title(
-    f"👋 Welcome, {st.session_state.username}!"
+    f"👋 Welcome, {st.session_state['username']}!"
 )
 
 st.write(
@@ -225,3 +230,31 @@ st.write(
 st.info(
     "Use the sidebar to open your study tools."
 )
+
+
+# ==========================================
+# SESSION INFORMATION
+# ==========================================
+
+with st.sidebar:
+
+    st.success(
+        f"👤 {st.session_state['username']}"
+    )
+
+    st.caption(
+        f"User ID: {st.session_state['user_id']}"
+    )
+
+    st.divider()
+
+    if st.button(
+        "🚪 Logout",
+        use_container_width=True
+    ):
+
+        st.session_state["logged_in"] = False
+        st.session_state["user_id"] = None
+        st.session_state["username"] = None
+
+        st.rerun()
