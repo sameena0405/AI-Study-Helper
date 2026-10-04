@@ -1,6 +1,17 @@
 import streamlit as st
 
-from utils.data_manager import get_dashboard_stats
+from utils.auth import (
+    create_users_table,
+    register_user,
+    login_user
+)
+
+
+# ==========================================
+# DATABASE
+# ==========================================
+
+create_users_table()
 
 
 # ==========================================
@@ -15,156 +26,202 @@ st.set_page_config(
 
 
 # ==========================================
-# DASHBOARD DATA
+# SESSION STATE
 # ==========================================
 
-stats = get_dashboard_stats()
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 
-notes_count = stats["notes"]
-
-quiz_count = stats["quizzes"]
-
-accuracy = stats["accuracy"]
-
-study_hours = stats["study_hours"]
+if "username" not in st.session_state:
+    st.session_state.username = None
 
 
 # ==========================================
-# HEADER
+# LOGIN SCREEN
 # ==========================================
 
-st.title("📚 AI-Powered Study Helper")
+if not st.session_state.logged_in:
 
-st.subheader(
-    "Learn smarter. Study better. Achieve more. 🚀"
+    # Hide sidebar before login
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "<h1 style='text-align:center;'>📚 AI Study Helper</h1>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "<p style='text-align:center;'>"
+        "Your personalized AI-powered study assistant"
+        "</p>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+
+        tab1, tab2 = st.tabs(
+            ["🔑 Login", "🆕 Create Account"]
+        )
+
+        # ==================================
+        # LOGIN
+        # ==================================
+
+        with tab1:
+
+            st.subheader("Welcome Back!")
+
+            username = st.text_input(
+                "Username",
+                key="login_username"
+            )
+
+            password = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            if st.button(
+                "🔑 Login",
+                use_container_width=True
+            ):
+
+                if not username.strip():
+
+                    st.warning(
+                        "Please enter your username."
+                    )
+
+                elif not password:
+
+                    st.warning(
+                        "Please enter your password."
+                    )
+
+                else:
+
+                    user = login_user(
+                        username,
+                        password
+                    )
+
+                    if user:
+
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = user[0]
+                        st.session_state.username = user[1]
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            "❌ Invalid username or password."
+                        )
+
+        # ==================================
+        # CREATE ACCOUNT
+        # ==================================
+
+        with tab2:
+
+            st.subheader("Create Your Account")
+
+            new_username = st.text_input(
+                "Username",
+                key="register_username"
+            )
+
+            new_password = st.text_input(
+                "Password",
+                type="password",
+                key="register_password"
+            )
+
+            confirm_password = st.text_input(
+                "Confirm Password",
+                type="password",
+                key="confirm_password"
+            )
+
+            if st.button(
+                "🆕 Create Account",
+                use_container_width=True
+            ):
+
+                if not new_username.strip():
+
+                    st.warning(
+                        "Please enter a username."
+                    )
+
+                elif not new_password:
+
+                    st.warning(
+                        "Please enter a password."
+                    )
+
+                elif new_password != confirm_password:
+
+                    st.error(
+                        "❌ Passwords do not match."
+                    )
+
+                else:
+
+                    created = register_user(
+                        new_username,
+                        new_password
+                    )
+
+                    if created:
+
+                        st.success(
+                            "✅ Account created successfully!"
+                        )
+
+                        st.info(
+                            "Go to the Login tab and login."
+                        )
+
+                    else:
+
+                        st.error(
+                            "❌ Username already exists."
+                        )
+
+    st.stop()
+
+
+# ==========================================
+# LOGGED-IN USER
+# ==========================================
+
+st.title(
+    f"👋 Welcome, {st.session_state.username}!"
 )
 
 st.write(
-    "Welcome to your personalized study assistant. "
-    "Use the tools in the sidebar to learn, "
-    "practice and track your progress."
+    "You are successfully logged in to AI Study Helper."
 )
 
-st.divider()
-
-
-# ==========================================
-# DASHBOARD METRICS
-# ==========================================
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-with col1:
-
-    st.metric(
-        "📄 Notes",
-        notes_count
-    )
-
-
-with col2:
-
-    st.metric(
-        "📝 Quizzes",
-        quiz_count
-    )
-
-
-with col3:
-
-    st.metric(
-        "🎯 Accuracy",
-        f"{accuracy:.0f}%"
-    )
-
-
-with col4:
-
-    st.metric(
-        "⏱️ Study Hours",
-        f"{study_hours:.1f}"
-    )
-
-
-st.divider()
-
-
-# ==========================================
-# STUDY TOOLS
-# ==========================================
-
-st.header("🚀 Study Tools")
-
-
-col1, col2, col3 = st.columns(3)
-
-
-with col1:
-
-    st.markdown("### 🤖 Ask AI")
-
-    st.write(
-        "Ask questions about your study topics."
-    )
-
-
-with col2:
-
-    st.markdown("### ✨ Summarizer")
-
-    st.write(
-        "Convert long notes into concise summaries."
-    )
-
-
-with col3:
-
-    st.markdown("### 📝 Quiz Generator")
-
-    st.write(
-        "Generate AI-powered practice questions."
-    )
-
-
-col1, col2, col3 = st.columns(3)
-
-
-with col1:
-
-    st.markdown("### 🧠 Flashcards")
-
-    st.write(
-        "Create quick revision flashcards."
-    )
-
-
-with col2:
-
-    st.markdown("### 📅 Study Planner")
-
-    st.write(
-        "Create a personalized study schedule."
-    )
-
-
-with col3:
-
-    st.markdown("### 📊 Progress")
-
-    st.write(
-        "Track your learning performance."
-    )
-
-
-st.divider()
-
-
-# ==========================================
-# GET STARTED
-# ==========================================
-
 st.info(
-    "👈 Select a feature from the sidebar to get started!"
+    "Use the sidebar to open your study tools."
 )

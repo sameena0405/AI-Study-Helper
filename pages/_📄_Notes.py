@@ -1,10 +1,10 @@
 import streamlit as st
-from pathlib import Path
 
-from utils.file_handler import (
-    extract_text,
+from utils.file_handler import extract_text
+from utils.data_manager import (
     save_note,
-    get_saved_notes
+    get_notes,
+    delete_note
 )
 
 
@@ -15,34 +15,26 @@ st.set_page_config(
 )
 
 
-# -----------------------------
-# PAGE TITLE
-# -----------------------------
-
 st.title("📄 My Notes")
-
 st.write(
-    "Upload, create, view and manage your study notes."
+    "Upload, create, view and manage your personal study notes."
 )
 
 st.divider()
 
 
 # -----------------------------
-# UPLOAD / WRITE TABS
+# TABS
 # -----------------------------
 
 tab1, tab2 = st.tabs(
-    [
-        "📥 Upload Notes",
-        "✍️ Write Notes"
-    ]
+    ["📥 Upload Notes", "✍️ Write Notes"]
 )
 
 
-# ==================================================
+# -----------------------------
 # UPLOAD NOTES
-# ==================================================
+# -----------------------------
 
 with tab1:
 
@@ -67,16 +59,12 @@ with tab1:
                 "🔍 Extracting text from your notes..."
             ):
 
-                text = extract_text(
-                    uploaded_file
-                )
+                text = extract_text(uploaded_file)
 
             if text.strip():
 
                 filename = (
-                    Path(
-                        uploaded_file.name
-                    ).stem
+                    uploaded_file.name.rsplit(".", 1)[0]
                     + ".txt"
                 )
 
@@ -89,9 +77,7 @@ with tab1:
                     "✅ Notes extracted and saved successfully!"
                 )
 
-                st.subheader(
-                    "📖 Extracted Text"
-                )
+                st.subheader("📖 Extracted Text")
 
                 st.text_area(
                     "Extracted content",
@@ -111,9 +97,9 @@ with tab1:
                 )
 
 
-# ==================================================
+# -----------------------------
 # WRITE NOTES
-# ==================================================
+# -----------------------------
 
 with tab2:
 
@@ -162,86 +148,58 @@ with tab2:
                 "✅ Notes saved successfully!"
             )
 
+            st.rerun()
 
-# ==================================================
+
+# -----------------------------
 # SAVED NOTES
-# ==================================================
+# -----------------------------
 
 st.divider()
 
-st.subheader("📚 Saved Notes")
+st.subheader("📚 My Saved Notes")
 
-saved_notes = get_saved_notes()
+saved_notes = get_notes()
 
 
 if saved_notes:
 
-    for note in saved_notes:
+    for filename, content in list(saved_notes.items()):
 
-        col1, col2 = st.columns(
-            [6, 1]
-        )
+        col1, col2 = st.columns([6, 1])
 
         with col1:
 
             st.markdown(
-                f"📄 **{note.name}**"
+                f"📄 **{filename}**"
             )
 
         with col2:
 
             delete = st.button(
                 "🗑️ Delete",
-                key=f"delete_{note.name}",
+                key=f"delete_{filename}",
                 use_container_width=True
             )
 
         if delete:
 
-            try:
+            delete_note(filename)
 
-                note.unlink()
+            st.success(
+                f"🗑️ '{filename}' deleted successfully!"
+            )
 
-                st.success(
-                    f"🗑️ '{note.name}' deleted successfully!"
-                )
+            st.rerun()
 
-                st.rerun()
+        with st.expander("👁️ View Note"):
 
-            except Exception as e:
-
-                st.error(
-                    f"❌ Could not delete the note: {e}"
-                )
-
-
-        with st.expander(
-            "👁️ View Note"
-        ):
-
-            try:
-
-                with open(
-                    note,
-                    "r",
-                    encoding="utf-8"
-                ) as file:
-
-                    content = file.read()
-
-                st.text_area(
-                    "Note content",
-                    content,
-                    height=200,
-                    key=f"note_{note.name}"
-                )
-
-            except Exception:
-
-                st.error(
-                    "❌ Unable to read this note."
-                )
-
+            st.text_area(
+                "Note content",
+                content,
+                height=200,
+                key=f"view_{filename}"
+            )
 
 else:
 

@@ -1,70 +1,161 @@
+import sqlite3
+from pathlib import Path
 import streamlit as st
 
 
 # ==========================================
-# INITIALIZE USER DATA
+# DATABASE
 # ==========================================
 
-def initialize_user_data():
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_FILE = BASE_DIR / "data" / "users.db"
 
-    if "quiz_results" not in st.session_state:
-        st.session_state.quiz_results = []
+DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    if "study_hours" not in st.session_state:
-        st.session_state.study_hours = 0.0
 
-    if "notes" not in st.session_state:
-        st.session_state.notes = []
+def get_connection():
+    return sqlite3.connect(DB_FILE)
 
 
 # ==========================================
-# QUIZ RESULTS
+# CREATE DATA TABLES
+# ==========================================
+
+def create_data_tables():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quiz_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            score INTEGER NOT NULL,
+            total INTEGER NOT NULL,
+            accuracy REAL NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            content TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS study_hours (
+            user_id INTEGER PRIMARY KEY,
+            hours REAL NOT NULL DEFAULT 0
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+create_data_tables()
+
+
+# ==========================================
+# CURRENT USER
+# ==========================================
+
+def get_current_user_id():
+
+    return st.session_state.get("user_id")
+
+
+# ==========================================
+# QUIZ
 # ==========================================
 
 def save_quiz_result(score, total, accuracy):
 
-    initialize_user_data()
+    user_id = get_current_user_id()
 
-    st.session_state.quiz_results.append({
-        "score": score,
-        "total": total,
-        "accuracy": accuracy
-    })
+    if user_id is None:
+        return
 
+    conn = get_connection()
+    cursor = conn.cursor()
 
-# ==========================================
-# GET QUIZ RESULTS
-# ==========================================
+    cursor.execute(
+        """
+        INSERT INTO quiz_results
+        (user_id, score, total, accuracy)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            score,
+            total,
+            float(accuracy)
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
 
 def get_quiz_results():
 
-    initialize_user_data()
+    user_id = get_current_user_id()
 
-    return st.session_state.quiz_results
+    if user_id is None:
+        return []
 
+    conn = get_connection()
+    cursor = conn.cursor()
 
-# ==========================================
-# GET QUIZ STATISTICS
-# ==========================================
+    cursor.execute(
+        """
+        SELECT score, total, accuracy
+        FROM quiz_results
+        WHERE user_id = ?
+        ORDER BY id
+        """,
+        (user_id,)
+    )
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return [
+        {
+            "score": row[0],
+            "total": row[1],
+            "accuracy": row[2]
+        }
+        for row in rows
+    ]
+
 
 def get_quiz_stats():
 
     results = get_quiz_results()
 
     if not results:
+
         return {
             "quiz_count": 0,
             "accuracy": 0
         }
 
     accuracies = [
-        float(result.get("accuracy", 0))
+        float(result["accuracy"])
         for result in results
     ]
 
     return {
         "quiz_count": len(results),
-        "accuracy": sum(accuracies) / len(accuracies)
+        "accuracy": round(
+            sum(accuracies) / len(accuracies),
+            2
+        )
     }
 
 
@@ -72,45 +163,209 @@ def get_quiz_stats():
 # NOTES
 # ==========================================
 
-def add_note(filename):
+def save_note(filename, content):
 
-    initialize_user_data()
+    user_id = get_current_user_id()
 
-    if filename not in st.session_state.notes:
-        st.session_state.notes.append(filename)
+    if user_id is None:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM notes
+        WHERE user_id = ?
+        AND filename = ?
+        """,
+        (
+            user_id,
+            filename
+        )
+    )
+
+    existing = cursor.fetchone()
+
+    if existing:
+
+        cursor.execute(
+            """
+            UPDATE notes
+            SET content = ?
+            WHERE id = ?
+            """,
+            (
+                content,
+                existing[0]
+            )
+        )
+
+    else:
+
+        cursor.execute(
+            """
+            INSERT INTO notes
+            (user_id, filename, content)
+            VALUES (?, ?, ?)
+            """,
+            (
+                user_id,
+                filename,
+                content
+            )
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_notes():
+
+    user_id = get_current_user_id()
+
+    if user_id is None:
+        return {}
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT filename, content
+        FROM notes
+        WHERE user_id = ?
+        ORDER BY id
+        """,
+        (user_id,)
+    )
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return {
+        row[0]: row[1]
+        for row in rows
+    }
+
+
+def delete_note(filename):
+
+    user_id = get_current_user_id()
+
+    if user_id is None:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM notes
+        WHERE user_id = ?
+        AND filename = ?
+        """,
+        (
+            user_id,
+            filename
+        )
+    )
+
+    conn.commit()
+    conn.close()
 
 
 def get_notes_count():
 
-    initialize_user_data()
+    user_id = get_current_user_id()
 
-    return len(st.session_state.notes)
+    if user_id is None:
+        return 0
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM notes
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    )
+
+    count = cursor.fetchone()[0]
+
+    conn.close()
+
+    return count
 
 
 # ==========================================
 # STUDY HOURS
 # ==========================================
 
-def get_study_hours():
-
-    initialize_user_data()
-
-    return float(st.session_state.study_hours)
-
-
-# ==========================================
-# SAVE STUDY HOURS
-# ==========================================
-
 def save_study_hours(hours):
 
-    initialize_user_data()
+    user_id = get_current_user_id()
 
-    st.session_state.study_hours = float(hours)
+    if user_id is None:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO study_hours
+        (user_id, hours)
+        VALUES (?, ?)
+        ON CONFLICT(user_id)
+        DO UPDATE SET hours = excluded.hours
+        """,
+        (
+            user_id,
+            float(hours)
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_study_hours():
+
+    user_id = get_current_user_id()
+
+    if user_id is None:
+        return 0
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT hours
+        FROM study_hours
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    )
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result:
+        return float(result[0])
+
+    return 0
 
 
 # ==========================================
-# DASHBOARD STATISTICS
+# DASHBOARD
 # ==========================================
 
 def get_dashboard_stats():

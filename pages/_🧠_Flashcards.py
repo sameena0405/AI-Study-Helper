@@ -1,8 +1,12 @@
 import streamlit as st
 
 from modules.flashcard_generator import generate_flashcards
-from utils.file_handler import get_saved_notes
+from utils.data_manager import get_notes, delete_note
 
+
+# ==========================================
+# PAGE SETTINGS
+# ==========================================
 
 st.set_page_config(
     page_title="Flashcards",
@@ -10,6 +14,10 @@ st.set_page_config(
     layout="wide"
 )
 
+
+# ==========================================
+# TITLE
+# ==========================================
 
 st.title("🧠 AI Flashcards")
 
@@ -41,44 +49,50 @@ tab1, tab2 = st.tabs(
 
 with tab1:
 
-    saved_notes = get_saved_notes()
+    saved_notes = get_notes()
 
     if saved_notes:
 
-        note_names = [
-            note.name
-            for note in saved_notes
-        ]
+        note_names = list(saved_notes.keys())
 
         selected_note = st.selectbox(
-            "Select a saved note",
+            "📚 Select a saved note",
             note_names
         )
 
-        selected_path = next(
-            note
-            for note in saved_notes
-            if note.name == selected_note
-        )
-
-        with open(
-            selected_path,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            saved_text = file.read()
+        saved_text = saved_notes[selected_note]
 
         st.success(
             f"📄 Using: {selected_note}"
         )
 
+        # ==================================
+        # DELETE SELECTED NOTE
+        # ==================================
+
+        if st.button(
+            "🗑️ Delete Selected Note",
+            use_container_width=True
+        ):
+
+            delete_note(selected_note)
+
+            # Clear generated flashcards if needed
+            if "flashcards" in st.session_state:
+                del st.session_state.flashcards
+
+            st.success(
+                f"✅ '{selected_note}' deleted successfully!"
+            )
+
+            st.rerun()
+
     else:
 
         st.info(
-            "No saved notes available. "
-            "You can enter text manually using the "
-            "'Enter Text' tab."
+            "📭 No saved notes available. "
+            "You can create notes from the Notes page "
+            "or enter text manually."
         )
 
         saved_text = ""
@@ -105,17 +119,8 @@ with tab2:
 
 
 # ==========================================
-# DETERMINE SOURCE
+# SOURCE SELECTION
 # ==========================================
-
-if tab1:
-
-    pass
-
-
-# Use the selected source
-# The user can choose either saved notes
-# or manually entered text.
 
 source_choice = st.radio(
     "📌 Generate flashcards from:",
@@ -206,7 +211,7 @@ if st.button(
 
             st.error(
                 "❌ Could not generate flashcards. "
-                "Please make sure Ollama is running."
+                "Please check your Groq API configuration."
             )
 
         else:
@@ -294,6 +299,7 @@ if "flashcards" in st.session_state:
         ):
 
             st.session_state.show_answer = True
+
             st.rerun()
 
 
@@ -307,9 +313,7 @@ if "flashcards" in st.session_state:
             f"💡 **Answer:** {card['answer']}"
         )
 
-
         st.write("")
-
 
         col1, col2 = st.columns(2)
 
@@ -326,7 +330,6 @@ if "flashcards" in st.session_state:
                 if index < len(cards) - 1:
 
                     st.session_state.flashcard_index += 1
-
                     st.session_state.show_answer = False
 
                     st.rerun()
@@ -348,7 +351,6 @@ if "flashcards" in st.session_state:
                 if index < len(cards) - 1:
 
                     st.session_state.flashcard_index += 1
-
                     st.session_state.show_answer = False
 
                     st.rerun()
@@ -366,6 +368,7 @@ if "flashcards" in st.session_state:
 
         col1, col2, col3 = st.columns(3)
 
+
         with col1:
 
             st.metric(
@@ -373,12 +376,14 @@ if "flashcards" in st.session_state:
                 len(cards)
             )
 
+
         with col2:
 
             st.metric(
                 "✅ I Know",
                 st.session_state.flashcard_known
             )
+
 
         with col3:
 
@@ -390,6 +395,10 @@ if "flashcards" in st.session_state:
 
         st.divider()
 
+
+        # ==================================
+        # REVIEW AGAIN
+        # ==================================
 
         if st.button(
             "🔁 Review Again",
