@@ -2,11 +2,6 @@ import sqlite3
 from pathlib import Path
 import streamlit as st
 
-
-# ==========================================
-# DATABASE
-# ==========================================
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_FILE = BASE_DIR / "data" / "users.db"
 
@@ -17,12 +12,7 @@ def get_connection():
     return sqlite3.connect(DB_FILE)
 
 
-# ==========================================
-# CREATE DATA TABLES
-# ==========================================
-
 def create_data_tables():
-
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -59,21 +49,13 @@ def create_data_tables():
 create_data_tables()
 
 
-# ==========================================
-# CURRENT USER
-# ==========================================
-
 def get_current_user_id():
-
     return st.session_state.get("user_id")
 
 
-# ==========================================
-# QUIZ
-# ==========================================
+# ---------------- QUIZ ----------------
 
 def save_quiz_result(score, total, accuracy):
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -82,26 +64,17 @@ def save_quiz_result(score, total, accuracy):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         INSERT INTO quiz_results
         (user_id, score, total, accuracy)
         VALUES (?, ?, ?, ?)
-        """,
-        (
-            user_id,
-            score,
-            total,
-            float(accuracy)
-        )
-    )
+    """, (user_id, score, total, float(accuracy)))
 
     conn.commit()
     conn.close()
 
 
 def get_quiz_results():
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -110,18 +83,14 @@ def get_quiz_results():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT score, total, accuracy
         FROM quiz_results
         WHERE user_id = ?
         ORDER BY id
-        """,
-        (user_id,)
-    )
+    """, (user_id,))
 
     rows = cursor.fetchall()
-
     conn.close()
 
     return [
@@ -135,11 +104,9 @@ def get_quiz_results():
 
 
 def get_quiz_stats():
-
     results = get_quiz_results()
 
     if not results:
-
         return {
             "quiz_count": 0,
             "accuracy": 0
@@ -159,12 +126,9 @@ def get_quiz_stats():
     }
 
 
-# ==========================================
-# NOTES
-# ==========================================
+# ---------------- NOTES ----------------
 
 def save_note(filename, content):
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -173,56 +137,34 @@ def save_note(filename, content):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT id
         FROM notes
         WHERE user_id = ?
         AND filename = ?
-        """,
-        (
-            user_id,
-            filename
-        )
-    )
+    """, (user_id, filename))
 
     existing = cursor.fetchone()
 
     if existing:
-
-        cursor.execute(
-            """
+        cursor.execute("""
             UPDATE notes
             SET content = ?
             WHERE id = ?
-            """,
-            (
-                content,
-                existing[0]
-            )
-        )
+        """, (content, existing[0]))
 
     else:
-
-        cursor.execute(
-            """
+        cursor.execute("""
             INSERT INTO notes
             (user_id, filename, content)
             VALUES (?, ?, ?)
-            """,
-            (
-                user_id,
-                filename,
-                content
-            )
-        )
+        """, (user_id, filename, content))
 
     conn.commit()
     conn.close()
 
 
 def get_notes():
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -231,18 +173,14 @@ def get_notes():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT filename, content
         FROM notes
         WHERE user_id = ?
         ORDER BY id
-        """,
-        (user_id,)
-    )
+    """, (user_id,))
 
     rows = cursor.fetchall()
-
     conn.close()
 
     return {
@@ -252,7 +190,6 @@ def get_notes():
 
 
 def delete_note(filename):
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -261,24 +198,17 @@ def delete_note(filename):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         DELETE FROM notes
         WHERE user_id = ?
         AND filename = ?
-        """,
-        (
-            user_id,
-            filename
-        )
-    )
+    """, (user_id, filename))
 
     conn.commit()
     conn.close()
 
 
 def get_notes_count():
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -287,14 +217,11 @@ def get_notes_count():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT COUNT(*)
         FROM notes
         WHERE user_id = ?
-        """,
-        (user_id,)
-    )
+    """, (user_id,))
 
     count = cursor.fetchone()[0]
 
@@ -303,12 +230,9 @@ def get_notes_count():
     return count
 
 
-# ==========================================
-# STUDY HOURS
-# ==========================================
+# ---------------- STUDY HOURS ----------------
 
 def save_study_hours(hours):
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -317,26 +241,19 @@ def save_study_hours(hours):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         INSERT INTO study_hours
         (user_id, hours)
         VALUES (?, ?)
         ON CONFLICT(user_id)
         DO UPDATE SET hours = excluded.hours
-        """,
-        (
-            user_id,
-            float(hours)
-        )
-    )
+    """, (user_id, float(hours)))
 
     conn.commit()
     conn.close()
 
 
 def get_study_hours():
-
     user_id = get_current_user_id()
 
     if user_id is None:
@@ -345,14 +262,11 @@ def get_study_hours():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT hours
         FROM study_hours
         WHERE user_id = ?
-        """,
-        (user_id,)
-    )
+    """, (user_id,))
 
     result = cursor.fetchone()
 
@@ -364,9 +278,7 @@ def get_study_hours():
     return 0
 
 
-# ==========================================
-# DASHBOARD
-# ==========================================
+# ---------------- DASHBOARD ----------------
 
 def get_dashboard_stats():
 
