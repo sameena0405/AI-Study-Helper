@@ -10,6 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 st.title("📝 AI Quiz Generator")
 
 st.write(
@@ -26,7 +27,11 @@ st.divider()
 user_id = st.session_state.get("user_id")
 
 if user_id is None:
-    st.error("❌ User session not found. Please logout and login again.")
+
+    st.error(
+        "❌ User session not found. Please logout and login again."
+    )
+
     st.stop()
 
 
@@ -36,7 +41,9 @@ if user_id is None:
 
 col1, col2 = st.columns(2)
 
+
 with col1:
+
     subject = st.selectbox(
         "📚 Select Subject",
         [
@@ -52,7 +59,9 @@ with col1:
         ]
     )
 
+
 with col2:
+
     difficulty = st.selectbox(
         "🎯 Difficulty",
         [
@@ -78,7 +87,7 @@ num_questions = st.slider(
 
 
 # -----------------------------
-# Clear old quiz when settings change
+# Clear old quiz
 # -----------------------------
 
 settings = (
@@ -88,14 +97,23 @@ settings = (
     num_questions
 )
 
+
 if "quiz_settings" not in st.session_state:
 
     st.session_state.quiz_settings = settings
 
+
 elif st.session_state.quiz_settings != settings:
 
-    st.session_state.pop("quiz", None)
-    st.session_state.pop("quiz_submitted", None)
+    st.session_state.pop(
+        "quiz",
+        None
+    )
+
+    st.session_state.pop(
+        "quiz_submitted",
+        None
+    )
 
     st.session_state.quiz_settings = settings
 
@@ -115,10 +133,27 @@ if st.button(
     if not topic.strip():
 
         st.warning(
-            "Please enter a quiz topic first."
+            "⚠️ Please enter a quiz topic first."
         )
 
     else:
+
+        # Reset error states
+
+        st.session_state.quiz_quota_exceeded = False
+
+        st.session_state.quiz_service_busy = False
+
+        st.session_state.quiz_generation_error = False
+
+
+        # Remove old quiz
+
+        st.session_state.pop(
+            "quiz",
+            None
+        )
+
 
         with st.spinner(
             f"🤖 Generating {num_questions} questions..."
@@ -131,24 +166,96 @@ if st.button(
                 num_questions
             )
 
-        if len(quiz) < num_questions:
+
+        # -----------------------------
+        # Quota exceeded
+        # -----------------------------
+
+        if st.session_state.get(
+            "quiz_quota_exceeded",
+            False
+        ):
 
             st.error(
-                f"Only {len(quiz)} questions were generated. "
-                "Please click Generate AI Quiz again."
+                "❌ Gemini API quota exceeded."
             )
 
-            st.session_state.pop("quiz", None)
+            st.info(
+                "Your Gemini request quota has been reached. "
+                "Please wait until the quota resets before "
+                "generating another AI quiz."
+            )
+
+
+        # -----------------------------
+        # Gemini busy
+        # -----------------------------
+
+        elif st.session_state.get(
+            "quiz_service_busy",
+            False
+        ):
+
+            st.error(
+                "⚠️ Gemini is temporarily unavailable."
+            )
+
+            st.info(
+                "Gemini is currently experiencing high demand. "
+                "Please wait a few minutes and try again."
+            )
+
+
+        # -----------------------------
+        # Other generation error
+        # -----------------------------
+
+        elif st.session_state.get(
+            "quiz_generation_error",
+            False
+        ):
+
+            st.error(
+                "❌ Quiz could not be generated."
+            )
+
+            st.info(
+                "Gemini did not return valid quiz data. "
+                "Please try again later."
+            )
+
+
+        # -----------------------------
+        # Safety check
+        # -----------------------------
+
+        elif not quiz:
+
+            st.error(
+                "❌ No quiz was generated."
+            )
+
+            st.info(
+                "Please try again later."
+            )
+
+
+        # -----------------------------
+        # Successful generation
+        # -----------------------------
 
         else:
 
             st.session_state.quiz = quiz
+
             st.session_state.quiz_topic = topic
+
             st.session_state.quiz_difficulty = difficulty
+
             st.session_state.quiz_submitted = False
 
             st.success(
-                f"🎉 {num_questions} questions generated!"
+                f"🎉 {len(quiz)} questions generated successfully!"
             )
 
 
@@ -167,11 +274,18 @@ if "quiz" in st.session_state:
     )
 
     st.caption(
-        f"Difficulty: {st.session_state.quiz_difficulty} | "
+        f"Difficulty: "
+        f"{st.session_state.quiz_difficulty} | "
         f"Questions: {len(quiz)}"
     )
 
+
     answers = {}
+
+
+    # -----------------------------
+    # Questions
+    # -----------------------------
 
     for i, q in enumerate(quiz):
 
@@ -199,9 +313,11 @@ if "quiz" in st.session_state:
 
         score = 0
 
+
         for i, q in enumerate(quiz):
 
             if answers[i] == q["answer"]:
+
                 score += 1
 
 
@@ -211,7 +327,7 @@ if "quiz" in st.session_state:
 
 
         # -----------------------------
-        # Save result to Supabase
+        # Save result
         # -----------------------------
 
         try:
@@ -242,9 +358,13 @@ if "quiz" in st.session_state:
 
         st.divider()
 
-        st.subheader("🎯 Your Result")
+        st.subheader(
+            "🎯 Your Result"
+        )
+
 
         col1, col2 = st.columns(2)
+
 
         with col1:
 
@@ -252,6 +372,7 @@ if "quiz" in st.session_state:
                 "Score",
                 f"{score}/{len(quiz)}"
             )
+
 
         with col2:
 
@@ -267,7 +388,10 @@ if "quiz" in st.session_state:
 
         st.divider()
 
-        st.subheader("📖 Answer Review")
+        st.subheader(
+            "📖 Answer Review"
+        )
+
 
         for i, q in enumerate(quiz):
 

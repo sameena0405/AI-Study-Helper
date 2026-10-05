@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 
 def create_study_plan(
@@ -7,23 +7,17 @@ def create_study_plan(
     days,
     daily_hours
 ):
-    """
-    Create a personalized study schedule.
-    """
 
     plan = []
 
-    # Calculate total available hours
     total_hours = daily_hours * days
 
-    # Priority weights
     priority_weights = {
         "High": 3,
         "Medium": 2,
         "Low": 1
     }
 
-    # Calculate total weight
     total_weight = sum(
         priority_weights.get(
             subject["priority"],
@@ -32,7 +26,6 @@ def create_study_plan(
         for subject in subjects
     )
 
-    # Allocate hours according to priority
     allocations = []
 
     for subject in subjects:
@@ -54,7 +47,6 @@ def create_study_plan(
             "hours": hours
         })
 
-    # Create daily schedule
     remaining = {
         item["name"]: item["hours"]
         for item in allocations
@@ -73,6 +65,7 @@ def create_study_plan(
         )
 
         sessions = []
+
         hours_left = daily_hours
 
         while hours_left > 0.01:
@@ -86,7 +79,6 @@ def create_study_plan(
             if not available:
                 break
 
-            # Select subject with highest priority
             available.sort(
                 key=lambda name: (
                     priority_weights.get(

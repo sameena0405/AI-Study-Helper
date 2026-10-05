@@ -1,10 +1,27 @@
+import os
 import requests
 import json
 import re
+import time
+import streamlit as st
 
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "llama3.2"
+MODEL = "gemini-3.8-flash"
+
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models"
+)
+
+
+def get_api_key():
+
+    try:
+
+        return st.secrets["GEMINI_API_KEY"]
+
+    except Exception:
+
+        return os.environ.get("GEMINI_API_KEY")
 
 
 def clean_json(text):
@@ -33,14 +50,26 @@ def generate_flashcards(
     difficulty="Medium"
 ):
 
+    api_key = get_api_key()
+
+    if not api_key:
+
+        st.error(
+            "❌ GEMINI_API_KEY is not configured."
+        )
+
+        return []
+
     prompt = f"""
 You are an AI study assistant.
 
-Create {count} useful study flashcards from the following study material.
+Create {count} useful study flashcards
+from the following study material.
 
 Difficulty: {difficulty}
 
 Study material:
+
 {text}
 
 Requirements:
@@ -50,101 +79,217 @@ Requirements:
 - Questions must be clear and meaningful.
 - Answers must be concise but complete.
 - Do not simply copy the entire sentence from the notes.
-- Use the information from the study material only.
+- Use information from the study material only.
 - Avoid duplicate questions.
 - Focus on concepts useful for exam revision.
 
 Return ONLY valid JSON in exactly this format:
 
-[
-    {{
-        "question": "Question here",
-        "answer": "Answer here"
-    }}
-]
+{{
+    "flashcards": [
+        {{
+            "question": "Question here",
+            "answer": "Answer here"
+        }}
+    ]
+}}
 """
 
-    try:
+    for retry in range(3):
 
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
+        try:
+
+            response = requests.post(
+
+                f"{GEMINI_URL}/{MODEL}:generateContent",
+
+                params={
+                    "key": api_key
+                },
+
+                headers={
+                    "Content-Type": "application/json"
+                },
+
+                json={
+
+                    "contents": [
+
+                        {
+                            "parts": [
+
+                                {
+                                    "text": prompt
+                                }
+
+                            ]
+                        }
+
+                    ],
+
+                    "generationConfig": {
+
+                        "responseMimeType":
+                        "application/json"
+
                     }
-                ],
-                "stream": False,
-                "format": "json"
-            },
-            timeout=180
-        )
 
-        response.raise_for_status()
+                },
 
-        data = response.json()
+                timeout=120
+            )
 
-        content = data["message"]["content"]
+            # Temporary overload
+            if response.status_code == 503:
 
-        content = clean_json(content)
+                if retry < 2:
 
-        cards = json.loads(content)
+                    st.warning(
+                        f"⏳ Gemini is busy. "
+                        f"Retrying... ({retry + 1}/3)"
+                    )
 
-        if isinstance(cards, dict):
+                    time.sleep(5)
 
-            if "flashcards" in cards:
-                cards = cards["flashcards"]
+                    continue
 
-            elif "cards" in cards:
-                cards = cards["cards"]
+                st.error(
+                    "❌ Gemini is currently busy. "
+                    "Please try again later."
+                )
 
-            else:
-                cards = [cards]
+                return []
 
-        if not isinstance(cards, list):
+            # Quota exceeded
+            if response.status_code == 429:
+
+                st.error(
+                    "❌ Gemini API quota exceeded. "
+                    "Please wait until your quota resets."
+                )
+
+                return []
+
+            # Model unavailable
+            if response.status_code == 404:
+
+                st.error(
+                    f"❌ Gemini model '{MODEL}' "
+                    "is not available for this API."
+                )
+
+                return []
+
+            # Other errors
+            if response.status_code != 200:
+
+                st.error(
+                    f"❌ Gemini API Error "
+                    f"({response.status_code}): "
+                    f"{response.text}"
+                )
+
+                return []
+
+            data = response.json()
+
+            content = (
+                data["candidates"][0]
+                ["content"]["parts"][0]["text"]
+            )
+
+            result = json.loads(
+                clean_json(content)
+            )
+
+            cards = result.get(
+                "flashcards",
+                []
+            )
+
+            if not isinstance(cards, list):
+
+                return []
+
+            valid_cards = []
+
+            for card in cards:
+
+                if not isinstance(card, dict):
+
+                    continue
+
+                if (
+                    "question" not in card
+                    or "answer" not in card
+                ):
+
+                    continue
+
+                question = str(
+                    card["question"]
+                ).strip()
+
+                answer = str(
+                    card["answer"]
+                ).strip()
+
+                if not question or not answer:
+
+                    continue
+
+                valid_cards.append({
+
+                    "question": question,
+
+                    "answer": answer
+
+                })
+
+            return valid_cards[:count]
+
+        except requests.exceptions.ConnectionError:
+
+            if retry < 2:
+
+                time.sleep(5)
+
+                continue
+
+            st.error(
+                "❌ Could not connect to Gemini."
+            )
+
             return []
 
-        valid_cards = []
+        except requests.exceptions.Timeout:
 
-        for card in cards:
+            if retry < 2:
 
-            if not isinstance(card, dict):
+                time.sleep(5)
+
                 continue
 
-            if (
-                "question" not in card
-                or "answer" not in card
-            ):
-                continue
+            st.error(
+                "⏳ Gemini request timed out."
+            )
 
-            question = str(
-                card["question"]
-            ).strip()
+            return []
 
-            answer = str(
-                card["answer"]
-            ).strip()
+        except json.JSONDecodeError:
 
-            if not question or not answer:
-                continue
+            st.error(
+                "❌ Gemini returned invalid JSON."
+            )
 
-            valid_cards.append({
-                "question": question,
-                "answer": answer
-            })
+            return []
 
-        return valid_cards[:count]
+        except Exception as e:
 
-    except requests.exceptions.ConnectionError:
+            st.error(
+                f"❌ Flashcard generation error: {e}"
+            )
 
-        return []
+            return []
 
-    except requests.exceptions.Timeout:
-
-        return []
-
-    except Exception:
-
-        return []
+    return []

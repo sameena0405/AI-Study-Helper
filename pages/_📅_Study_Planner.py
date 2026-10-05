@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date
 
 from modules.study_planner import create_study_plan
 
@@ -33,12 +33,14 @@ st.subheader("⚙️ Plan Your Study")
 
 col1, col2, col3 = st.columns(3)
 
+
 with col1:
 
     start_date = st.date_input(
         "📅 Start Date",
         value=date.today()
     )
+
 
 with col2:
 
@@ -48,6 +50,7 @@ with col2:
         max_value=30,
         value=7
     )
+
 
 with col3:
 
@@ -93,37 +96,44 @@ for i in range(
         [5, 2, 1]
     )
 
+
     with col1:
 
         st.session_state.subjects[i]["name"] = (
             st.text_input(
                 f"Subject {i + 1}",
+
                 value=st.session_state.subjects[i]["name"],
+
                 placeholder="Example: Machine Learning",
+
                 key=f"subject_{i}"
             )
         )
 
+
     with col2:
+
+        priorities = [
+            "High",
+            "Medium",
+            "Low"
+        ]
 
         st.session_state.subjects[i]["priority"] = (
             st.selectbox(
                 "Priority",
-                [
-                    "High",
-                    "Medium",
-                    "Low"
-                ],
-                index=[
-                    "High",
-                    "Medium",
-                    "Low"
-                ].index(
+
+                priorities,
+
+                index=priorities.index(
                     st.session_state.subjects[i]["priority"]
                 ),
+
                 key=f"priority_{i}"
             )
         )
+
 
     with col3:
 
@@ -142,7 +152,12 @@ for i in range(
 st.write("")
 
 
+# ==========================================
+# BUTTONS
+# ==========================================
+
 col1, col2 = st.columns(2)
+
 
 with col1:
 
@@ -182,11 +197,13 @@ if generate:
         if subject["name"].strip()
     ]
 
+
     if not valid_subjects:
 
         st.warning(
             "Please add at least one subject."
         )
+
 
     else:
 
@@ -198,8 +215,11 @@ if generate:
         )
 
         st.session_state.study_plan = plan
+
         st.session_state.plan_start = start_date
+
         st.session_state.plan_days = days
+
         st.session_state.plan_hours = daily_hours
 
 
@@ -213,11 +233,14 @@ if "study_plan" in st.session_state:
 
     st.divider()
 
-    st.subheader("📋 Your Personalized Study Plan")
+    st.subheader(
+        "📋 Your Personalized Study Plan"
+    )
 
-    # --------------------------------------
+
+    # ======================================
     # SUMMARY
-    # --------------------------------------
+    # ======================================
 
     total_hours = (
         st.session_state.plan_days
@@ -226,7 +249,9 @@ if "study_plan" in st.session_state:
 
     study_days = st.session_state.plan_days
 
+
     col1, col2, col3, col4 = st.columns(4)
+
 
     with col1:
 
@@ -235,12 +260,14 @@ if "study_plan" in st.session_state:
             study_days
         )
 
+
     with col2:
 
         st.metric(
             "⏱️ Daily Hours",
             f"{st.session_state.plan_hours:.1f} h"
         )
+
 
     with col3:
 
@@ -249,10 +276,12 @@ if "study_plan" in st.session_state:
             f"{total_hours:.1f} h"
         )
 
+
     with col4:
 
         st.metric(
             "🎯 Subjects",
+
             len(
                 [
                     s
@@ -266,9 +295,9 @@ if "study_plan" in st.session_state:
     st.divider()
 
 
-    # --------------------------------------
+    # ======================================
     # DAILY SCHEDULE
-    # --------------------------------------
+    # ======================================
 
     for day in plan:
 
@@ -278,9 +307,11 @@ if "study_plan" in st.session_state:
             "%A, %d %B %Y"
         )
 
+
         st.markdown(
             f"### 📅 Day {day['day']} — {date_text}"
         )
+
 
         st.caption(
             f"Total study time: "
@@ -316,11 +347,13 @@ if "study_plan" in st.session_state:
                 [5, 2, 2]
             )
 
+
             with col1:
 
                 st.markdown(
                     f"**📚 {session['subject']}**"
                 )
+
 
             with col2:
 
@@ -328,6 +361,7 @@ if "study_plan" in st.session_state:
                     f"{priority_icon} "
                     f"{session['priority']}"
                 )
+
 
             with col3:
 
@@ -339,13 +373,15 @@ if "study_plan" in st.session_state:
         st.divider()
 
 
-    # --------------------------------------
+    # ======================================
     # STUDY TIPS
-    # --------------------------------------
+    # ======================================
 
     st.subheader("💡 Study Strategy")
 
+
     col1, col2 = st.columns(2)
+
 
     with col1:
 
@@ -354,6 +390,7 @@ if "study_plan" in st.session_state:
             "After each session, close your notes "
             "and recall the important concepts."
         )
+
 
     with col2:
 
@@ -365,6 +402,7 @@ if "study_plan" in st.session_state:
 
 
     st.divider()
+
 
     st.success(
         "🎯 Your study plan is ready. "

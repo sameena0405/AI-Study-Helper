@@ -2,12 +2,14 @@ import re
 from collections import Counter
 
 
-def summarize_text(text, sentences_count=3):
+def summarize_text(
+    text,
+    sentences_count=3
+):
 
     if not text or not text.strip():
         return ""
 
-    # Split text into sentences
     sentences = re.split(
         r'(?<=[.!?])\s+',
         text.strip()
@@ -22,7 +24,6 @@ def summarize_text(text, sentences_count=3):
     if len(sentences) <= sentences_count:
         return " ".join(sentences)
 
-    # Remove common words
     stop_words = {
         "the", "is", "are", "was", "were",
         "a", "an", "and", "or", "but",
@@ -46,7 +47,6 @@ def summarize_text(text, sentences_count=3):
         if word not in stop_words
     )
 
-    # Score sentences
     scores = []
 
     for index, sentence in enumerate(sentences):
@@ -66,13 +66,11 @@ def summarize_text(text, sentences_count=3):
             (score, index, sentence)
         )
 
-    # Select important sentences
     best_sentences = sorted(
         scores,
         reverse=True
     )[:sentences_count]
 
-    # Keep original order
     best_sentences.sort(
         key=lambda x: x[1]
     )
